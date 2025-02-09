@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
       - name: task-service
-        image: task-service:latest
+        image: mohammadshaad/task-service:latest
         ports:
         - containerPort: 8081
 ---

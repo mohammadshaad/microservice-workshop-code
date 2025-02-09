@@ -26,7 +26,7 @@ pipeline {
         stage('Build Frontend') {
             steps {
                 dir('user-interface') {
-                    sh 'docker build -t ${DOCKER_REGISTRY}/todo-frontend:${BUILD_NUMBER} .'
+                    sh 'docker build -t ${DOCKER_REGISTRY}/user-interface:${BUILD_NUMBER} .'
                 }
             }
         }
@@ -36,19 +36,21 @@ pipeline {
                 sh '''
                     docker push ${DOCKER_REGISTRY}/user-service:${BUILD_NUMBER}
                     docker push ${DOCKER_REGISTRY}/task-service:${BUILD_NUMBER}
-                    docker push ${DOCKER_REGISTRY}/todo-frontend:${BUILD_NUMBER}
+                    docker push ${DOCKER_REGISTRY}/user-interface:${BUILD_NUMBER}
                 '''
             }
         }
         
         stage('Deploy to Kubernetes') {
             steps {
-                sh '''
-                    kubectl apply -f k8s/
-                    kubectl set image deployment/user-service user-service=${DOCKER_REGISTRY}/user-service:${BUILD_NUMBER}
-                    kubectl set image deployment/task-service task-service=${DOCKER_REGISTRY}/task-service:${BUILD_NUMBER}
-                    kubectl set image deployment/todo-frontend todo-frontend=${DOCKER_REGISTRY}/todo-frontend:${BUILD_NUMBER}
-                '''
+                withKubeConfig([credentialsId: 'kubernetes-config']) {
+                    sh '''
+                        kubectl apply -f k8s/
+                        kubectl set image deployment/user-service user-service=${DOCKER_REGISTRY}/user-service:${BUILD_NUMBER}
+                        kubectl set image deployment/task-service task-service=${DOCKER_REGISTRY}/task-service:${BUILD_NUMBER}
+                        kubectl set image deployment/user-interface user-interface=${DOCKER_REGISTRY}/user-interface:${BUILD_NUMBER}
+                    '''
+                }
             }
         }
     }
