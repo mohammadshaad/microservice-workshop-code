@@ -1,0 +1,129 @@
+version: '3.8'
+
+services:
+  # API Gateway
+  api-gateway:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./api-gateway/nginx.conf:/etc/nginx/conf.d/default.conf
+    depends_on:
+      - task-service
+      - user-service
+    networks:
+      - microservices-network
+
+  # User Service
+  user-service:
+    platform: linux/arm64
+    build:
+      context: ./user-service
+      dockerfile: Dockerfile
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://user-db:5432/userdb
+      - SPRING_DATASOURCE_USERNAME=postgres
+      - SPRING_DATASOURCE_PASSWORD=postgres
+      - SPRING_JPA_HIBERNATE_DDL_AUTO=update
+    depends_on:
+      - user-db
+    networks:
+      - microservices-network
+
+  # User Service Database
+  user-db:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=userdb
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+    volumes:
+      - user-db-data:/var/lib/postgresql/data
+    networks:
+      - microservices-network
+
+  # Task Service
+  task-service:
+    platform: linux/arm64
+    build:
+      context: ./task-service
+      dockerfile: Dockerfile
+    environment:
+      - MONGODB_URI=mongodb://task-db:27017/taskdb
+    depends_on:
+      - task-db
+    networks:
+      - microservices-network
+
+  # Task Service Database
+  task-db:
+    image: mongo:6-jammy
+    volumes:
+      - task-db-data:/data/db
+    networks:
+      - microservices-network
+
+  # Frontend
+  user-interface:
+    platform: linux/arm64
+    build:
+      context: ./user-interface
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost
+      - NODE_ENV=production
+    depends_on:
+      - api-gateway
+    networks:
+      - microservices-network
+
+  # Redis for caching
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - microservices-network
+
+  # Prometheus for monitoring
+  prometheus:
+    image: prom/prometheus:v2.45.0
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+    ports:
+      - "9090:9090"
+    networks:
+      - microservices-network
+
+  # Grafana for visualization
+  grafana:
+    image: grafana/grafana:10.0.0
+    ports:
+      - "3001:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    networks:
+      - microservices-network
+
+volumes:
+  user-db-data:
+  task-db-data:
+  redis-data:
+  prometheus-data:
+  grafana-data:
+
+networks:
+  microservices-network:
+    driver: bridge 
